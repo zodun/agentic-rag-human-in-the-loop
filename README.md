@@ -4,12 +4,6 @@ A multi-agent RAG system where one agent researches an answer from your document
 a second agent drafts an outbound reply, and **a human approves, edits, or rejects
 that draft before anything is sent.**
 
-Built on [`GiovanniPasq/agentic-rag-for-dummies`](https://github.com/GiovanniPasq/agentic-rag-for-dummies)
-(MIT), which supplies the LangGraph agent, parent/child chunking, and hybrid
-retrieval. This fork adds the approval gate, an Anthropic provider path, a fix for
-running local Qdrant under Gradio's threads, and a cleaner UI. See
-[What changed here](#what-changed-here).
-
 ---
 
 ## The idea
