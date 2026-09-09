@@ -32,6 +32,12 @@ SHOW_AGENT_STEPS = os.environ.get("SHOW_AGENT_STEPS", "false").lower() == "true"
 # human sees it (unsupported claims, missing caveats, tone). One auto-revision.
 CRITIC_ENABLED = os.environ.get("CRITIC_ENABLED", "true").lower() == "true"
 
+# Let the agent fall back to a public web search when the documents do not cover
+# a question (e.g. salary benchmarks). Off by default keeps answers strictly
+# grounded; anything from the web is labelled "Estimate (not from your documents)".
+WEB_SEARCH_ENABLED = os.environ.get("WEB_SEARCH_ENABLED", "false").lower() == "true"
+WEB_SEARCH_MAX_RESULTS = int(os.environ.get("WEB_SEARCH_MAX_RESULTS", "5"))
+
 # If set, an approved reply is also POSTed to this Slack Incoming Webhook (still
 # only after human approval). Unset = the reply is only written to outbox/.
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")

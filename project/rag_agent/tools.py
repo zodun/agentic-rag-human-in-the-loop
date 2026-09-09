@@ -80,9 +80,43 @@ class ToolFactory:
             log_tool_end("retrieve_parent_chunks", output)
             return output
     
+    def _web_search(self, query: str) -> str:
+        """Search the public web for general or market context the documents do not cover
+        (for example salary benchmarks, standards, current events).
+
+        Use this ONLY after the document tools have returned nothing relevant. Anything
+        drawn from this tool is outside evidence: in the final answer, put it under a
+        heading "Estimate (not from your documents)" and name it as an estimate.
+
+        Args:
+            query: A focused web query.
+        """
+        log_tool_start("web_search", {"query": query})
+        try:
+            from ddgs import DDGS
+            n = getattr(config, "WEB_SEARCH_MAX_RESULTS", 5)
+            with DDGS() as ddgs:
+                hits = list(ddgs.text(query, max_results=n))
+            if not hits:
+                out = "NO_WEB_RESULTS"
+            else:
+                out = "\n\n".join(
+                    f"{h.get('title', '')}\n{h.get('href', '')}\n{h.get('body', '')}" for h in hits
+                )
+            log_tool_end("web_search", out)
+            return out
+        except Exception as e:
+            log_error("web_search", e)
+            out = f"WEB_SEARCH_ERROR: {str(e)}"
+            log_tool_end("web_search", out)
+            return out
+
     def create_tools(self) -> list:
         """Create and return the list of tools."""
-        search_tool = tool("search_child_chunks")(self._search_child_chunks)
-        retrieve_tool = tool("retrieve_parent_chunks")(self._retrieve_parent_chunks)
-        
-        return [search_tool, retrieve_tool]
+        tools = [
+            tool("search_child_chunks")(self._search_child_chunks),
+            tool("retrieve_parent_chunks")(self._retrieve_parent_chunks),
+        ]
+        if getattr(config, "WEB_SEARCH_ENABLED", False):
+            tools.append(tool("web_search")(self._web_search))
+        return tools

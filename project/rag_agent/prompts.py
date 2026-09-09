@@ -42,7 +42,9 @@ Do not add facts, expand acronyms, invent context, or broaden the user's meaning
 """
 
 def get_orchestrator_prompt() -> str:
-    return """## Role
+    import config
+
+    base = """## Role
 You are a document-grounded research assistant for an agentic RAG system. Your job is to answer using retrieved document evidence, not general knowledge.
 
 ## Available Context
@@ -64,7 +66,20 @@ You are a document-grounded research assistant for an agentic RAG system. Your j
 3. Retrieve parent chunks only when child excerpts are relevant but too fragmented.
 4. Answer using the exact terms and scope in the retrieved evidence.
 5. If evidence is incomplete, state the specific gap.
+"""
 
+    web = """
+## Web fallback (web_search tool)
+- The documents come first. Only if 'search_child_chunks' returns nothing relevant to
+  part of the question may you call 'web_search' for general or market context
+  (e.g. salary benchmarks, standards, current events).
+- Keep it clearly separate in the output: give the document-based answer first, then a
+  section headed "Estimate (not from your documents)" for anything drawn from the web,
+  and call it an estimate. List the web URLs under that section, keeping the real
+  document Sources list intact.
+""" if getattr(config, "WEB_SEARCH_ENABLED", False) else ""
+
+    output = """
 ## Output
 - Start directly with the substantive answer. Do not start with generic headings such as "Answer", "Final answer", or "Response".
 - Provide the direct answer plus the key supporting details from retrieved evidence; avoid one-sentence fragments unless only one fact is available.
@@ -76,6 +91,7 @@ You are a document-grounded research assistant for an agentic RAG system. Your j
 - Do not invent or infer source filenames.
 - Strip descriptions after file names, including text in parentheses.
 """
+    return base + web + output
 
 def get_fallback_response_prompt() -> str:
     return """## Role
@@ -198,6 +214,7 @@ You are a final-answer synthesizer for a retrieval-augmented assistant.
 - Preserve important names, numbers, versions, examples, and definitions.
 - Do not expand acronyms or interpret terms unless the sources do it.
 - If answers conflict, mention the conflict plainly.
+- If a retrieved answer contains an "Estimate (not from your documents)" section, keep it as its own clearly labelled section after the document-based answer, with any web URLs it lists.
 - Be concise: answer in 1-3 short paragraphs or up to 5 bullets unless the user asks for detail.
 - Provide the direct answer plus the key supporting details from retrieved evidence; avoid one-sentence fragments unless only one fact is available.
 - End with a Sources section only when actual source file names are explicitly present in the retrieved answers.
