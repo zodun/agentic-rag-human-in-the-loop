@@ -22,14 +22,24 @@ def create_gradio_ui():
     
     def upload_handler(files, progress=gr.Progress()):
         if not files:
+            gr.Warning("Choose a PDF or Markdown file in the box above first.")
             return None, format_file_list()
-            
-        added, skipped = doc_manager.add_documents(
-            files, 
-            progress_callback=lambda p, desc: progress(p, desc=desc)
-        )
-        
-        gr.Info(f"✅ Added: {added} | Skipped: {skipped}")
+
+        try:
+            added, skipped = doc_manager.add_documents(
+                files,
+                progress_callback=lambda p, desc: progress(p, desc=desc),
+            )
+        except Exception as exc:
+            gr.Error(f"Upload failed: {exc}")
+            return None, format_file_list()
+
+        if added:
+            gr.Info(f"Added {added} document(s)." + (f" Skipped {skipped} already indexed." if skipped else ""))
+        elif skipped:
+            gr.Warning(f"Skipped {skipped} — already indexed. Use Clear All to re-index.")
+        else:
+            gr.Warning("Nothing added. Only .pdf and .md files are supported.")
         return None, format_file_list()
     
     def clear_handler():

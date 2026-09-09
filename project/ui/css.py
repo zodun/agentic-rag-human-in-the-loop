@@ -95,13 +95,22 @@ input, textarea {
 input::placeholder, textarea::placeholder { color: var(--text-dim) !important; }
 input:focus, textarea:focus { border-color: var(--accent-dim) !important; outline: none !important; }
 
-.file-preview, [data-testid="file-upload"] {
-    background: var(--sunken) !important;
-    border: 1px dashed var(--line) !important;
+.file-preview, [data-testid="file-upload"], .upload-container, .file-upload,
+.gradio-container .file, div[data-testid="block-info"] + div .wrap {
+    background: var(--raised) !important;
+    border: 1.5px dashed #4a4750 !important;
     border-radius: 12px !important;
-    min-height: 150px !important;
+    min-height: 160px !important;
+    cursor: pointer !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
 }
-[data-testid="file-upload"] *, .file-preview * { color: var(--text-dim) !important; }
+.file-preview:hover, [data-testid="file-upload"]:hover, .upload-container:hover {
+    border-color: var(--accent-dim) !important;
+    background: #262529 !important;
+}
+[data-testid="file-upload"] *, .file-preview *, .upload-container * { color: var(--text) !important; }
+[data-testid="file-upload"] svg, .upload-container svg { color: var(--text-dim) !important; }
 #file-list-box { background: transparent !important; border: none !important; }
 #file-list-box textarea { background: var(--sunken) !important; font-size: 14px !important; }
 
