@@ -83,10 +83,31 @@ def create_gradio_ui():
             rag_system.discard_reply(thread_id)
         return "", "", "", "🗑 Discarded. Nothing was saved."
 
-    with gr.Blocks(title="Agentic RAG") as demo:
-        
+    topbar_html = """
+    <div class="studio-topbar">
+      <div class="studio-brand">
+        <div class="mark">RAG</div>
+        <div>
+          <div class="name">LangGraph Studio</div>
+          <div class="sub">RAG Engine Core</div>
+        </div>
+      </div>
+      <span class="studio-pill"><span class="dot"></span>Local &bull; single user</span>
+    </div>
+    <div class="studio-telemetry">
+      <span><span class="k">Retrieval:</span><span class="v teal">hybrid dense + BM25</span></span>
+      <span><span class="k">Vector store:</span><span class="v">Qdrant</span></span>
+      <span><span class="k">Chunking:</span><span class="v">parent / child</span></span>
+      <span><span class="k">Gate:</span><span class="v amber">human approval before send</span></span>
+      <span><span class="k">Model:</span><span class="v indigo">Claude (configurable)</span></span>
+    </div>
+    """
+
+    with gr.Blocks(title="LangGraph Studio &mdash; RAG Engine Core") as demo:
+        gr.HTML(topbar_html)
+
         with gr.Tab("Documents", elem_id="doc-management-tab"):
-            gr.Markdown("## Add New Documents")
+            gr.Markdown('<p class="studio-eyebrow">Vector Knowledge / Ingestion</p>\n\n## Add New Documents', sanitize_html=False)
             gr.Markdown("Upload PDF or Markdown files. Existing documents are skipped; use Clear All before re-indexing.")
             
             files_input = gr.File(
@@ -118,7 +139,7 @@ def create_gradio_ui():
             clear_btn.click(clear_handler, None, file_list)
         
         with gr.Tab("Chat"):
-            gr.Markdown("Ask questions about your uploaded documents. Answers are grounded in the documents and cite their sources.")
+            gr.Markdown('<p class="studio-eyebrow">Workflow Graph / Q&amp;A</p>\n\nAsk questions about your uploaded documents. Answers are grounded in the documents and cite their sources.', sanitize_html=False)
             chatbot = gr.Chatbot(
                 height=680,
                 placeholder="<strong>Ask a question about your uploaded documents.</strong>",
@@ -132,9 +153,11 @@ def create_gradio_ui():
         if config.HITL_REPLY_ENABLED:
             with gr.Tab("Draft Reply"):
                 gr.Markdown(
+                    '<p class="studio-eyebrow">Human Approval Gate / Execution Guardrail</p>\n\n'
                     "Paste a message you need to answer. The system researches a grounded answer "
                     "from your documents and drafts a reply. **Edit it freely, then approve** - only "
-                    "then is it written to `outbox/`."
+                    "then is it written to `outbox/`.",
+                    sanitize_html=False,
                 )
                 reply_thread = gr.State("")
 
