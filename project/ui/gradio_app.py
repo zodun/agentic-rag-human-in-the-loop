@@ -222,7 +222,8 @@ def create_gradio_ui():
 
                 incoming_box = gr.Textbox(
                     label="The message you got",
-                    lines=4,
+                    lines=3,
+                    max_lines=8,
                     placeholder="e.g. Hi, can a monthly customer still get a refund 10 days after being charged?",
                 )
                 draft_start_btn = gr.Button("Write a reply", variant="primary")
@@ -232,20 +233,21 @@ def create_gradio_ui():
 
                 draft_box = gr.Textbox(
                     label="Draft reply — edit it however you like",
-                    lines=16,
+                    lines=10,
+                    max_lines=20,
                     interactive=True,
+                    autoscroll=False,
+                )
+                revise_box = gr.Textbox(
+                    label="Want it different? Say how",
+                    placeholder="e.g. make it shorter and drop the greeting",
+                    lines=2,
+                    max_lines=4,
                 )
                 with gr.Row():
-                    revise_box = gr.Textbox(
-                        label="Want it different? Say how",
-                        placeholder="e.g. make it shorter and drop the greeting",
-                        lines=2,
-                        scale=3,
-                    )
-                    revise_btn = gr.Button("Rewrite", scale=1)
-                with gr.Row():
-                    approve_btn = gr.Button("Approve & send", variant="primary")
-                    discard_btn = gr.Button("Throw away", variant="stop")
+                    revise_btn = gr.Button("Rewrite", variant="secondary", size="sm", min_width=120)
+                    approve_btn = gr.Button("Approve & send", variant="primary", min_width=150)
+                    discard_btn = gr.Button("Throw away", variant="stop", size="sm", min_width=120)
 
                 reply_status = gr.Markdown()
 
