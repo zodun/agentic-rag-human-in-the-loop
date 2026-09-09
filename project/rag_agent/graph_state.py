@@ -31,6 +31,7 @@ class State(MessagesState):
     replyRevisionCount: int = 0
     critiqueNotes: List[str] = []
     critiqueRounds: int = 0
+    replyRecipient: str = ""
     replyStatus: str = ""
     replyPath: str = ""
     replyDeliveredTo: str = ""

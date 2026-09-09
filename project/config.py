@@ -47,6 +47,15 @@ WEB_SEARCH_MAX_RESULTS = int(os.environ.get("WEB_SEARCH_MAX_RESULTS", "5"))
 # only after human approval). Unset = the reply is only written to outbox/.
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
 
+# SMTP: if configured, an approved reply is emailed to the recipient entered in
+# the Draft Reply tab (or EMAIL_TO as a default). Gmail needs an App Password.
+SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+SMTP_FROM = os.environ.get("SMTP_FROM", "")
+EMAIL_TO = os.environ.get("EMAIL_TO", "")
+
 # Where the approve / reject / edit-distance log is written.
 DECISION_LOG_PATH = os.path.join(OUTBOX_PATH, "_decisions.jsonl")
 

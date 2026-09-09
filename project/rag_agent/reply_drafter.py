@@ -155,6 +155,7 @@ def send_reply(state: State, outbox):
         draft=state.get("draftReply", ""),
         query=state.get("originalQuery", ""),
         revisions=state.get("replyRevisionCount", 0),
+        recipient=state.get("replyRecipient", ""),
     )
     path, delivered = result["path"], result["delivered_to"]
     return {

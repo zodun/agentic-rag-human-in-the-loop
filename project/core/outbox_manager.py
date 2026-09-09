@@ -1,7 +1,10 @@
 import json
 import re
+import smtplib
+import ssl
 import urllib.request
 from datetime import datetime, timezone
+from email.message import EmailMessage
 from pathlib import Path
 
 import config
@@ -55,10 +58,36 @@ class OutboxManager:
             log_error("outbox.slack", exc)
             return False
 
-    def send(self, *, draft: str, query: str, revisions: int = 0) -> dict:
-        """Deliver a human-approved reply. Always writes a file; also posts to
-        Slack when SLACK_WEBHOOK_URL is set. Returns {path, delivered_to}."""
-        log_tool_start("outbox.send", {"query": query, "revisions": revisions})
+    def _send_email(self, subject: str, body: str, to: str) -> bool:
+        host = getattr(config, "SMTP_HOST", "")
+        if not (host and to):
+            return False
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = getattr(config, "SMTP_FROM", "") or config.SMTP_USER
+        msg["To"] = to
+        msg.set_content(body)
+        try:
+            port = int(getattr(config, "SMTP_PORT", 587))
+            if port == 465:
+                with smtplib.SMTP_SSL(host, port, context=ssl.create_default_context(), timeout=15) as s:
+                    s.login(config.SMTP_USER, config.SMTP_PASSWORD)
+                    s.send_message(msg)
+            else:
+                with smtplib.SMTP(host, port, timeout=15) as s:
+                    s.starttls(context=ssl.create_default_context())
+                    s.login(config.SMTP_USER, config.SMTP_PASSWORD)
+                    s.send_message(msg)
+            return True
+        except Exception as exc:
+            log_error("outbox.email", exc)
+            return False
+
+    def send(self, *, draft: str, query: str, revisions: int = 0, recipient: str = "") -> dict:
+        """Deliver a human-approved reply. Always writes a file; also emails it
+        (when SMTP is configured and a recipient is given) and/or posts to Slack.
+        Returns {path, delivered_to}."""
+        log_tool_start("outbox.send", {"query": query, "revisions": revisions, "recipient": recipient})
         try:
             self.outbox_path.mkdir(parents=True, exist_ok=True)
             subject, body = split_subject_and_body(draft)
@@ -66,8 +95,14 @@ class OutboxManager:
             filename = f"{now.strftime('%Y%m%dT%H%M%SZ')}__{_slugify(subject)}.md"
             file_path = self.outbox_path / filename
 
+            recipient = (recipient or "").strip() or getattr(config, "EMAIL_TO", "")
+            email_ok = self._send_email(subject, body, recipient) if recipient else False
             slack_ok = self._post_to_slack(subject, body)
-            channels = ["outbox/"] + (["Slack"] if slack_ok else [])
+            channels = ["outbox/"]
+            if email_ok:
+                channels.append(f"email ({recipient})")
+            if slack_ok:
+                channels.append("Slack")
 
             front_matter = (
                 "---\n"

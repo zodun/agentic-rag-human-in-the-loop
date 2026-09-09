@@ -137,14 +137,14 @@ class RAGSystem:
         values = self.reply_graph.get_state(cfg).values or {}
         return {"draft": values.get("draftReply", ""), "critique_notes": values.get("critiqueNotes", [])}
 
-    def approve_reply(self, thread_id: str, final_text: str) -> dict:
+    def approve_reply(self, thread_id: str, final_text: str, recipient: str = "") -> dict:
         """Approve the (possibly hand-edited) text, deliver it, and log the decision
         plus how far the human moved it from the model's draft."""
         cfg = self._reply_cfg(thread_id)
         before = (self.reply_graph.get_state(cfg).values or {})
         model_draft = before.get("draftReply", "")
 
-        self.reply_graph.update_state(cfg, {"draftReply": final_text})
+        self.reply_graph.update_state(cfg, {"draftReply": final_text, "replyRecipient": (recipient or "").strip()})
         self.reply_graph.update_state(cfg, {"messages": [HumanMessage(content="approve")]})
         self.reply_graph.invoke(None, cfg)
         after = self.reply_graph.get_state(cfg).values or {}
