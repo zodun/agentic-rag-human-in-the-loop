@@ -83,32 +83,15 @@ def create_gradio_ui():
             rag_system.discard_reply(thread_id)
         return "", "", "", "🗑 Discarded. Nothing was saved."
 
-    topbar_html = """
-    <div class="studio-topbar">
-      <div class="studio-brand">
-        <div class="mark">DA</div>
-        <div>
-          <div class="name">Document Assistant</div>
-          <div class="sub">Ask questions about your files, and draft replies you approve before they're saved.</div>
-        </div>
-      </div>
-      <span class="studio-pill"><span class="dot"></span>Ready</span>
-    </div>
-    <div class="studio-steps">
-      <span><span class="n">1</span> Add your documents</span>
-      <span class="arrow">&rarr;</span>
-      <span><span class="n">2</span> Ask a question, get an answer with sources</span>
-      <span class="arrow">&rarr;</span>
-      <span><span class="n">3</span> Draft a reply, edit it, approve it</span>
-    </div>
-    """
-
     with gr.Blocks(title="Document Assistant") as demo:
-        gr.HTML(topbar_html)
+        gr.Markdown(
+            "## Document Assistant\n"
+            '<p class="app-intro">Ask questions about your files, and draft replies you approve before they are saved.</p>',
+            sanitize_html=False,
+        )
 
         with gr.Tab("Documents", elem_id="doc-management-tab"):
-            gr.Markdown('<p class="studio-eyebrow">Your documents</p>\n\n## Add documents', sanitize_html=False)
-            gr.Markdown("Upload PDF or Markdown files. Existing documents are skipped; use Clear All before re-indexing.")
+            gr.Markdown("Upload PDF or Markdown files. Existing files are skipped; use *Clear All* before re-indexing.")
             
             files_input = gr.File(
                 label="Drop PDF or Markdown files here",
@@ -139,7 +122,7 @@ def create_gradio_ui():
             clear_btn.click(clear_handler, None, file_list)
         
         with gr.Tab("Chat"):
-            gr.Markdown('<p class="studio-eyebrow">Ask a question</p>\n\nAsk anything about your uploaded documents. Every answer is based on the documents and lists its sources.', sanitize_html=False)
+            gr.Markdown("Ask anything about your uploaded documents. Every answer is based on the documents and lists its sources.")
             chatbot = gr.Chatbot(
                 height=680,
                 placeholder="<strong>Ask a question about your uploaded documents.</strong>",
@@ -153,11 +136,9 @@ def create_gradio_ui():
         if config.HITL_REPLY_ENABLED:
             with gr.Tab("Draft Reply"):
                 gr.Markdown(
-                    '<p class="studio-eyebrow">Draft a reply</p>\n\n'
                     "Paste a message you need to answer. The system researches a grounded answer "
                     "from your documents and drafts a reply. **Edit it freely, then approve** - only "
-                    "then is it written to `outbox/`.",
-                    sanitize_html=False,
+                    "then is it written to `outbox/`."
                 )
                 reply_thread = gr.State("")
 
