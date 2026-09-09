@@ -13,7 +13,12 @@ OUTBOX_PATH = os.path.join(_BASE_DIR, "outbox")
 # (LLM_MODEL below); "openai" reads OPENAI_API_KEY.
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "anthropic").lower()
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-opus-5")
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5.2")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+# Point the OpenAI client at an OpenAI-compatible API. For DeepSeek set
+# OPENAI_BASE_URL=https://api.deepseek.com and OPENAI_MODEL=deepseek-chat
+# (deepseek-chat supports the forced tool calls this app needs; the v4 "thinking"
+# models do not). Blank base URL = real OpenAI.
+OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "")
 LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "8192"))
 # Model used by the reply-drafting agent. Blank = same as the main model.
 DRAFTER_MODEL = os.environ.get("DRAFTER_MODEL", "")

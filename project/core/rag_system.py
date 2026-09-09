@@ -40,11 +40,15 @@ def build_llm(model_override: str | None = None):
         if not os.environ.get("OPENAI_API_KEY"):
             raise RuntimeError("OPENAI_API_KEY is not set. Add it to project/.env or export it.")
         from langchain_openai import ChatOpenAI
-        # gpt-5 family only accepts the default temperature; leave it unset.
-        return ChatOpenAI(
-            model=model_override or config.OPENAI_MODEL,
-            max_completion_tokens=config.LLM_MAX_TOKENS,
-        )
+        # Also used for OpenAI-compatible APIs (DeepSeek, etc.) via OPENAI_BASE_URL.
+        kwargs = {
+            "model": model_override or config.OPENAI_MODEL,
+            "max_tokens": config.LLM_MAX_TOKENS,
+        }
+        base_url = getattr(config, "OPENAI_BASE_URL", "")
+        if base_url:
+            kwargs["base_url"] = base_url
+        return ChatOpenAI(**kwargs)
 
     raise ValueError(f"Unsupported LLM_PROVIDER: {config.LLM_PROVIDER!r} (use anthropic, ollama, or openai)")
 

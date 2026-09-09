@@ -92,7 +92,7 @@ def critique_reply(state: State, llm):
         context += f"\n\nReviewer instructions that were meant to be applied:\n{prior_feedback}"
 
     try:
-        critique = llm.with_structured_output(ReplyCritique).invoke([
+        critique = llm.with_structured_output(ReplyCritique, method="function_calling").invoke([
             SystemMessage(content=get_reply_critic_prompt()),
             HumanMessage(content=context),
         ])
