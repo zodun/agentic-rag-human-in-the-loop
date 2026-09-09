@@ -10,6 +10,11 @@ It is built with LangGraph's `interrupt_before` mechanism and the existing
 `InMemorySaver` checkpointer, so the pause survives across UI turns on the same
 thread.
 
+`RAGSystem.initialize()` compiles the graph twice from the same nodes:
+`agent_graph` (`hitl=False`, ends at `aggregate_answers`) drives the **Chat** tab
+as plain Q&A, and `reply_graph` (`hitl=True`, the diagram below) drives the
+**Draft Reply** tab.
+
 ## Flow
 
 ```
@@ -43,18 +48,26 @@ State fields added to `State` (`rag_agent/graph_state.py`): `researchedAnswer`,
 `replyStatus`, `replyPath`. They are cleared at the top of every fresh turn in
 `summarize_history`.
 
-## Using it in the Gradio chat
+## Using it — the Draft Reply tab
 
-1. Ask a question. The agents research and post the grounded answer.
-2. A **✉️ Proposed reply** appears and the graph pauses.
-3. Reply in the chat box:
-   - `approve` (also `yes`, `send`, `lgtm`, …) → written to `outbox/`.
-   - `reject` (also `no`, `discard`, …) → nothing is sent.
-   - anything else → treated as revision instructions; a new draft is produced
-     and you are asked again.
+1. Paste the message you need to answer into **Incoming message / question**.
+2. Click **Research & draft reply**. The researched answer appears in the
+   collapsible context box; the draft appears in the editable **Proposed reply**
+   box; the graph is now paused at `human_approval`.
+3. Edit the draft directly if you want, then:
+   - **Approve & save to outbox** — your edited text (not just the model's
+     original) is written to `outbox/`.
+   - **Discard** — nothing is written.
+   - **Redraft with changes** — type instructions, the drafter rewrites, and the
+     graph pauses again.
 
-The approval turn is stored on the LangGraph thread, so the pause/resume works
-even though Gradio calls `chat()` afresh each message.
+`RAGSystem.start_reply / revise_reply / approve_reply / discard_reply` drive the
+`reply_graph` for these buttons. Each draft runs on its own thread id.
+`approve_reply` writes the edited text back to the `draftReply` channel with
+`update_state` before resuming, so `send_reply` persists exactly what you approved.
+
+The chat-typed `approve` / `reject` / revision path still works on `reply_graph`
+(see `apply_decision`); the dedicated tab is just a friendlier front end for it.
 
 ## Configuration
 

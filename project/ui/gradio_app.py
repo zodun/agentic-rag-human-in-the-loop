@@ -43,10 +43,46 @@ def create_gradio_ui():
     def chat_handler(msg, hist):
         for chunk in chat_interface.chat(msg, hist):
             yield chunk
-    
+
     def clear_chat_handler():
         chat_interface.clear_session()
-    
+
+    # ---- Draft Reply tab handlers ----
+    def draft_reply_handler(incoming):
+        incoming = (incoming or "").strip()
+        if not incoming:
+            return gr.update(), "", "", "Enter a message to respond to first."
+        result = rag_system.start_reply(incoming)
+        if result["needs_clarification"]:
+            return (
+                f"**Needs more detail:** {result['answer']}",
+                "", result["thread_id"],
+                "Add the missing detail above and click *Research & draft* again.",
+            )
+        answer = result["answer"] or "_No grounded answer was found in the documents._"
+        return answer, result["draft"], result["thread_id"], "Draft ready. Edit it above if needed, then **Approve**."
+
+    def revise_reply_handler(thread_id, instructions, current_draft):
+        if not thread_id:
+            return current_draft, "Draft something first."
+        if not (instructions or "").strip():
+            return current_draft, "Type what to change, then click Redraft."
+        new_draft = rag_system.revise_reply(thread_id, instructions)
+        return new_draft, "Redrafted. Edit above if needed, then **Approve**."
+
+    def approve_reply_handler(thread_id, final_text):
+        if not thread_id:
+            return "Nothing to approve - draft a reply first."
+        if not (final_text or "").strip():
+            return "The reply is empty."
+        path = rag_system.approve_reply(thread_id, final_text)
+        return f"✅ **Approved and saved** to `{path}`"
+
+    def discard_reply_handler(thread_id):
+        if thread_id:
+            rag_system.discard_reply(thread_id)
+        return "", "", "", "🗑 Discarded. Nothing was saved."
+
     with gr.Blocks(title="Agentic RAG") as demo:
         
         with gr.Tab("Documents", elem_id="doc-management-tab"):
@@ -82,12 +118,7 @@ def create_gradio_ui():
             clear_btn.click(clear_handler, None, file_list)
         
         with gr.Tab("Chat"):
-            if config.HITL_REPLY_ENABLED:
-                gr.Markdown(
-                    "I answer from your uploaded documents, then draft an outbound reply and "
-                    "**pause for your approval**. Reply **approve** to send it (saved to `outbox/`), "
-                    "**reject** to discard, or just say what to change."
-                )
+            gr.Markdown("Ask questions about your uploaded documents. Answers are grounded in the documents and cite their sources.")
             chatbot = gr.Chatbot(
                 height=680,
                 placeholder="<strong>Ask a question about your uploaded documents.</strong>",
@@ -96,7 +127,65 @@ def create_gradio_ui():
                 layout="bubble",
             )
             chatbot.clear(clear_chat_handler)
-            
             gr.ChatInterface(fn=chat_handler, chatbot=chatbot)
-    
+
+        if config.HITL_REPLY_ENABLED:
+            with gr.Tab("Draft Reply"):
+                gr.Markdown(
+                    "Paste a message you need to answer. The system researches a grounded answer "
+                    "from your documents and drafts a reply. **Edit it freely, then approve** - only "
+                    "then is it written to `outbox/`."
+                )
+                reply_thread = gr.State("")
+
+                incoming_box = gr.Textbox(
+                    label="Incoming message / question to answer",
+                    lines=4,
+                    placeholder="e.g. Hi, can a monthly customer still get a refund 10 days after being charged?",
+                )
+                draft_start_btn = gr.Button("Research & draft reply", variant="primary")
+
+                with gr.Accordion("Researched answer (context for the draft)", open=False):
+                    research_box = gr.Markdown()
+
+                draft_box = gr.Textbox(
+                    label="Proposed reply — edit before approving",
+                    lines=16,
+                    interactive=True,
+                )
+                with gr.Row():
+                    revise_box = gr.Textbox(
+                        label="Ask for changes (optional)",
+                        placeholder="e.g. make it shorter and drop the greeting",
+                        lines=2,
+                        scale=3,
+                    )
+                    revise_btn = gr.Button("Redraft with changes", scale=1)
+                with gr.Row():
+                    approve_btn = gr.Button("✅ Approve & save to outbox", variant="primary")
+                    discard_btn = gr.Button("🗑 Discard", variant="stop")
+
+                reply_status = gr.Markdown()
+
+                draft_start_btn.click(
+                    draft_reply_handler,
+                    [incoming_box],
+                    [research_box, draft_box, reply_thread, reply_status],
+                )
+                revise_btn.click(
+                    revise_reply_handler,
+                    [reply_thread, revise_box, draft_box],
+                    [draft_box, reply_status],
+                )
+                approve_btn.click(
+                    approve_reply_handler,
+                    [reply_thread, draft_box],
+                    [reply_status],
+                )
+                discard_btn.click(
+                    discard_reply_handler,
+                    [reply_thread],
+                    [research_box, draft_box, reply_thread, reply_status],
+                )
+
     return demo

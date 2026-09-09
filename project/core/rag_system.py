@@ -1,5 +1,6 @@
 import os
 import uuid
+from langchain_core.messages import AIMessage, HumanMessage
 import config
 from db.vector_db_manager import VectorDbManager
 from db.parent_store_manager import ParentStoreManager
@@ -54,7 +55,8 @@ class RAGSystem:
         self.parent_store = ParentStoreManager()
         self.chunker = DocumentChunker()
         self.observability = Observability()
-        self.agent_graph = None
+        self.agent_graph = None    # Chat tab: plain Q&A (no reply drafting)
+        self.reply_graph = None    # Draft Reply tab: research -> draft -> human approval
         self.thread_id = str(uuid.uuid4())
         self.recursion_limit = config.GRAPH_RECURSION_LIMIT
 
@@ -65,7 +67,9 @@ class RAGSystem:
         llm = build_llm()
         draft_llm = build_llm(config.DRAFTER_MODEL or None)
         tools = ToolFactory(collection).create_tools()
-        self.agent_graph = create_agent_graph(llm, tools, draft_llm=draft_llm)
+        self.agent_graph = create_agent_graph(llm, tools, draft_llm=draft_llm, hitl=False)
+        if config.HITL_REPLY_ENABLED:
+            self.reply_graph = create_agent_graph(llm, tools, draft_llm=draft_llm, hitl=True)
 
     def get_config(self):
         cfg = {"configurable": {"thread_id": self.thread_id}, "recursion_limit": self.recursion_limit}
@@ -80,3 +84,64 @@ class RAGSystem:
         except Exception as e:
             print(f"Warning: Could not delete thread {self.thread_id}: {e}")
         self.thread_id = str(uuid.uuid4())
+
+    # ------------------------------------------------------------------
+    # Draft Reply workflow (Draft Reply tab). Each call chain uses its own
+    # LangGraph thread id so drafts don't collide with the chat session.
+    # ------------------------------------------------------------------
+    def _reply_cfg(self, thread_id):
+        cfg = {"configurable": {"thread_id": thread_id}, "recursion_limit": self.recursion_limit}
+        handler = self.observability.get_handler()
+        if handler:
+            cfg["callbacks"] = [handler]
+        return cfg
+
+    def start_reply(self, question: str) -> dict:
+        """Research the question and produce a first draft. Returns the thread id,
+        the grounded answer, the draft, and whether the graph needs clarification."""
+        thread_id = str(uuid.uuid4())
+        cfg = self._reply_cfg(thread_id)
+        self.reply_graph.invoke({"messages": [HumanMessage(content=question.strip())]}, cfg)
+        state = self.reply_graph.get_state(cfg)
+        values = state.values or {}
+        next_nodes = state.next or ()
+
+        if "request_clarification" in next_nodes:
+            clarification = next(
+                (m.content for m in reversed(values.get("messages", []))
+                 if isinstance(m, AIMessage) and getattr(m, "name", None) == "clarification"),
+                "The question needs more detail to answer.",
+            )
+            return {"thread_id": thread_id, "answer": clarification, "draft": "", "needs_clarification": True}
+
+        return {
+            "thread_id": thread_id,
+            "answer": values.get("researchedAnswer", ""),
+            "draft": values.get("draftReply", ""),
+            "needs_clarification": False,
+        }
+
+    def revise_reply(self, thread_id: str, instructions: str) -> str:
+        """Redraft with reviewer instructions. Returns the new draft."""
+        cfg = self._reply_cfg(thread_id)
+        self.reply_graph.update_state(cfg, {"messages": [HumanMessage(content=instructions.strip())]})
+        self.reply_graph.invoke(None, cfg)
+        return (self.reply_graph.get_state(cfg).values or {}).get("draftReply", "")
+
+    def approve_reply(self, thread_id: str, final_text: str) -> str:
+        """Approve the (possibly hand-edited) text and write it to the outbox.
+        Returns the saved file path."""
+        cfg = self._reply_cfg(thread_id)
+        self.reply_graph.update_state(cfg, {"draftReply": final_text})
+        self.reply_graph.update_state(cfg, {"messages": [HumanMessage(content="approve")]})
+        self.reply_graph.invoke(None, cfg)
+        return (self.reply_graph.get_state(cfg).values or {}).get("replyPath", "")
+
+    def discard_reply(self, thread_id: str) -> None:
+        cfg = self._reply_cfg(thread_id)
+        try:
+            self.reply_graph.update_state(cfg, {"messages": [HumanMessage(content="reject")]})
+            self.reply_graph.invoke(None, cfg)
+            self.reply_graph.checkpointer.delete_thread(thread_id)
+        except Exception as e:
+            print(f"Warning: could not discard reply thread {thread_id}: {e}")

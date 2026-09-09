@@ -8,21 +8,20 @@ that draft before anything is sent.**
 
 ## The idea
 
-The app treats your question as an **incoming message you need to respond to** (a
-customer, a recruiter, a colleague). It does two things:
+Two separate surfaces:
 
-1. **Answers it** — the existing agentic RAG pipeline retrieves from your uploaded
-   documents and produces a grounded answer with sources.
-2. **Drafts the reply** — a separate agent turns that answer into a send-ready
-   message: subject, greeting, body, sign-off, sources.
+- **Chat tab** — plain Q&A over your documents. Ask a question, get a grounded
+  answer with sources. Nothing is drafted or sent.
+- **Draft Reply tab** — paste a message you need to answer (from a customer, a
+  recruiter, a colleague). The system researches a grounded answer, drafts a
+  send-ready reply (subject, greeting, body, sign-off, sources), and **pauses**.
+  You edit the draft directly, then choose:
 
-Then the graph **pauses**. Nothing is written anywhere until you respond in the chat:
-
-| You type | What happens |
+| Action | What happens |
 |---|---|
-| `approve` (also `yes`, `send`, `lgtm`) | The reply is written to `outbox/` as a timestamped Markdown file with front matter recording that a human approved it |
-| `reject` (also `no`, `discard`) | Discarded. Nothing is written. |
-| anything else | Treated as revision instructions — the drafter rewrites and asks again |
+| **Approve & save** | The reply — including any edits you made in the box — is written to `outbox/` as a timestamped Markdown file with front matter recording that a human approved it |
+| **Discard** | Nothing is written |
+| **Redraft with changes** | The drafter rewrites with your instructions and pauses again |
 
 The gate is structural, not advisory: the "send" node is unreachable except through
 an explicit approval, so `outbox/` only ever contains messages a person signed off on.
@@ -46,8 +45,9 @@ summarize → rewrite ───┤                          │
                                      (writes outbox/)      (loop back to draft)        (writes nothing)
 ```
 
-Implemented with LangGraph's `interrupt_before` and the in-memory checkpointer, so
-the pause survives across chat turns on the same thread. Full node-by-node write-up:
+Implemented with LangGraph's `interrupt_before` and the in-memory checkpointer. Two
+graphs are compiled from the same nodes: one without the reply stage for the Chat
+tab, one with it for the Draft Reply tab. Full node-by-node write-up:
 [`project/HUMAN_IN_THE_LOOP.md`](project/HUMAN_IN_THE_LOOP.md).
 
 ---
@@ -66,8 +66,9 @@ python project/app.py            # http://localhost:7860
 Then:
 
 1. **Documents** tab → upload a PDF or Markdown file → *Add Documents*
-2. **Chat** tab → ask a question about that document
-3. Review the drafted reply → type `approve`, `reject`, or what to change
+2. **Chat** tab → ask questions about the document (grounded answers with sources)
+3. **Draft Reply** tab → paste a message → *Research & draft reply* → edit the
+   draft → *Approve & save* / *Discard* / *Redraft with changes*
 4. Check `outbox/` for approved replies
 
 ### Good questions to ask
@@ -100,7 +101,7 @@ Set in `project/.env` or `project/config.py`.
 
 | Area | Change |
 |---|---|
-| **Human-in-the-loop reply** | New `project/rag_agent/reply_drafter.py` (drafter agent, approval pause, decision router, executor) and `project/core/outbox_manager.py`; wired into the graph behind `HITL_REPLY_ENABLED` |
+| **Human-in-the-loop reply** | New `project/rag_agent/reply_drafter.py` (drafter agent, approval pause, decision router, executor) and `project/core/outbox_manager.py`. Exposed as a dedicated **Draft Reply** tab with edit-in-place + approve/discard/redraft, kept separate from the Q&A chat |
 | **Anthropic provider** | `build_llm()` provider factory in `project/core/rag_system.py` (Anthropic / Ollama / OpenAI); dropped `temperature` for models that reject it; normalized responses whose `content` is a list of blocks (thinking + text) across the nodes and the token streamer |
 | **Local Qdrant + Gradio** | `force_disable_check_same_thread=True` on the Qdrant client — Gradio runs handlers on worker threads and macOS SQLite otherwise refuses the cross-thread connection, which was silently failing every document upload |
 | **Ingestion robustness** | A failed upload now rolls back its orphaned vector-store chunks (not just the parent files) and prints a real traceback |

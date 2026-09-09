@@ -28,8 +28,9 @@ from .reply_drafter import (
 )
 from .edges import route_after_orchestrator_call, route_after_rewrite
 
-def create_agent_graph(llm, tools_list, draft_llm=None):
+def create_agent_graph(llm, tools_list, draft_llm=None, hitl=None):
     draft_llm = draft_llm or llm
+    hitl = getattr(config, "HITL_REPLY_ENABLED", False) if hitl is None else hitl
     llm_with_tools = llm.bind_tools(tools_list)
     tool_node = ToolNode(tools_list)
 
@@ -68,7 +69,7 @@ def create_agent_graph(llm, tools_list, draft_llm=None):
 
     interrupt_nodes = ["request_clarification"]
 
-    if getattr(config, "HITL_REPLY_ENABLED", False):
+    if hitl:
         # Second agent drafts an outbound reply; the graph then pauses on
         # human_approval until a person approves, rejects, or requests changes.
         outbox = OutboxManager()
