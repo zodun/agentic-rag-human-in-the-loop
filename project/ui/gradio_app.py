@@ -153,19 +153,12 @@ def create_gradio_ui():
             )
         return md, header + body
 
-    header_html = """
-    <div class="app-header">
-      <div class="title">Document Assistant</div>
-      <div class="meta"><span class="dot"></span>You approve every reply</div>
-    </div>
-    """
-    footer_html = (
-        '<div class="app-footer"><span>Answers come from the files you add</span>'
-        '<span>Approved replies are saved to the outbox folder</span></div>'
-    )
-
     with gr.Blocks(title="Document Assistant") as demo:
-        gr.HTML(header_html)
+        gr.Markdown(
+            '<div class="app-title">Document Assistant</div>'
+            '<p class="app-note">Ask questions about your files. Draft replies that you approve before they are sent.</p>',
+            sanitize_html=False,
+        )
 
         with gr.Tab("Documents", elem_id="doc-management-tab"):
             gr.Markdown("Add PDF or text files. The assistant only answers using what you add here.")
@@ -289,7 +282,5 @@ def create_gradio_ui():
                 activity_refresh.click(activity_handler, None, [activity_md, activity_table])
                 approve_btn.click(activity_handler, None, [activity_md, activity_table])
                 discard_btn.click(activity_handler, None, [activity_md, activity_table])
-
-        gr.HTML(footer_html)
 
     return demo

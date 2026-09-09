@@ -44,7 +44,9 @@ CHILD_COLLECTION = "document_child_chunks"
 SPARSE_VECTOR_NAME = "sparse"
 
 # --- Model Configuration ---
-DENSE_MODEL = "Qwen/Qwen3-Embedding-0.6B"
+# all-MiniLM-L6-v2 is small and fast on CPU (seconds to index a document).
+# Set DENSE_MODEL=Qwen/Qwen3-Embedding-0.6B for higher quality if you have a GPU.
+DENSE_MODEL = os.environ.get("DENSE_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 SPARSE_MODEL = "Qdrant/bm25"
 LLM_MODEL = "granite4.1:8b"
 JUDGE_MODEL = "ministral-3:3b-instruct-2512-q8_0"
