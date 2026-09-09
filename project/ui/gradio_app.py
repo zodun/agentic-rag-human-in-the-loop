@@ -70,37 +70,46 @@ def create_gradio_ui():
             parts += [f"\n- {n}" for n in notes]
         return "\n".join(parts)
 
-    def draft_reply_handler(incoming):
+    def draft_reply_handler(incoming, thread_id):
         incoming = (incoming or "").strip()
         if not incoming:
-            return gr.update(), "", "", "Paste the message you want to reply to first."
+            yield gr.update(), gr.update(), thread_id, "Paste the message you want to reply to first."
+            return
+        yield gr.update(), "", thread_id, "⏳ Researching your files and drafting a reply… (20–40s)"
         r = rag_system.start_reply(incoming)
         if r["needs_clarification"]:
-            return (
+            yield (
                 f"**Needs more detail:** {r['answer']}",
                 "", r["thread_id"],
                 "Add a bit more detail above, then try again.",
             )
+            return
         status = "Here is a draft. Edit it if you want, then approve it or throw it away."
         if r["critique_notes"]:
             status += "  _(there is a note worth checking below)_"
-        return _context_md(r["answer"], r["passages"], r["critique_notes"]), r["draft"], r["thread_id"], status
+        yield _context_md(r["answer"], r["passages"], r["critique_notes"]), r["draft"], r["thread_id"], status
 
     def revise_reply_handler(thread_id, instructions, current_draft):
         if not thread_id:
-            return current_draft, "Write a reply first."
+            yield current_draft, "Write a reply first."
+            return
         if not (instructions or "").strip():
-            return current_draft, "Tell it what to change first."
+            yield current_draft, "Tell it what to change first."
+            return
+        yield current_draft, "⏳ Rewriting…"
         r = rag_system.revise_reply(thread_id, instructions)
-        return r["draft"], "Rewritten. Edit if you want, then approve it or throw it away."
+        yield r["draft"], "Rewritten. Edit if you want, then approve it or throw it away."
 
     def approve_reply_handler(thread_id, final_text, recipient):
         if not thread_id:
-            return "There is no reply yet — write one first."
+            yield "There is no reply yet — write one first."
+            return
         if not (final_text or "").strip():
-            return "The reply is empty."
+            yield "The reply is empty."
+            return
+        yield "⏳ Sending…"
         r = rag_system.approve_reply(thread_id, final_text, recipient)
-        return f"Approved. Delivered to: {r['delivered_to']}. Copy saved at `{r['path']}`."
+        yield f"Approved. Delivered to: {r['delivered_to']}. Copy saved at `{r['path']}`."
 
     def discard_reply_handler(thread_id):
         if thread_id:
@@ -261,7 +270,7 @@ def create_gradio_ui():
 
                 draft_start_btn.click(
                     draft_reply_handler,
-                    [incoming_box],
+                    [incoming_box, reply_thread],
                     [research_box, draft_box, reply_thread, reply_status],
                 )
                 revise_btn.click(
