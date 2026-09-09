@@ -106,14 +106,11 @@ Set in `project/.env` or `project/config.py`.
 | **Ingestion robustness** | A failed upload now rolls back its orphaned vector-store chunks (not just the parent files) and prints a real traceback |
 | **UI** | Hides internal agent chatter by default, calm light theme, clearer separation between the answer, the drafted reply, and the approval prompt |
 
-The upstream project's own documentation is preserved at
-[`README.upstream.md`](README.upstream.md) and [`project/README.md`](project/README.md).
+Deeper documentation of the RAG pipeline is in
+[`project/README.md`](project/README.md).
 
 ---
 
-## Credit & license
+## License
 
-Original work: **agentic-rag-for-dummies** by Giovanni Pasqualino —
-<https://github.com/GiovanniPasq/agentic-rag-for-dummies>.
-
-MIT licensed. See [`LICENSE`](LICENSE).
+MIT. See [`LICENSE`](LICENSE).
