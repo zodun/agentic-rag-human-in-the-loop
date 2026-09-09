@@ -17,7 +17,7 @@ def create_gradio_ui():
     def format_file_list():
         files = doc_manager.get_markdown_files()
         if not files:
-            return "📭 No documents available in the knowledge base"
+            return "No documents indexed yet."
         return "\n".join([f"{f}" for f in files])
     
     def upload_handler(files, progress=gr.Progress()):
@@ -45,7 +45,7 @@ def create_gradio_ui():
     def clear_handler():
         try:
             doc_manager.clear_all()
-            gr.Info("🗑️ Removed all documents")
+            gr.Info("Knowledge base cleared.")
         except Exception as exc:
             gr.Error(f"Unable to clear documents: {exc}")
         return format_file_list()
@@ -81,7 +81,7 @@ def create_gradio_ui():
                 "", r["thread_id"],
                 "Add the missing detail above and click *Research & draft* again.",
             )
-        status = "Draft ready. Edit it above if needed, then **Approve**."
+        status = "Draft ready for review. Edit as needed, then approve or discard."
         if r["critique_notes"]:
             status += "  _(reviewer left notes — see the context panel)_"
         return _context_md(r["answer"], r["passages"], r["critique_notes"]), r["draft"], r["thread_id"], status
@@ -92,7 +92,7 @@ def create_gradio_ui():
         if not (instructions or "").strip():
             return current_draft, "Type what to change, then click Redraft."
         r = rag_system.revise_reply(thread_id, instructions)
-        return r["draft"], "Redrafted. Edit above if needed, then **Approve**."
+        return r["draft"], "Redrafted. Edit as needed, then approve or discard."
 
     def approve_reply_handler(thread_id, final_text):
         if not thread_id:
@@ -100,12 +100,12 @@ def create_gradio_ui():
         if not (final_text or "").strip():
             return "The reply is empty."
         r = rag_system.approve_reply(thread_id, final_text)
-        return f"✅ **Approved.** Delivered to {r['delivered_to']} · saved to `{r['path']}`"
+        return f"Approved. Delivered to {r['delivered_to']}. Recorded at `{r['path']}`."
 
     def discard_reply_handler(thread_id):
         if thread_id:
             rag_system.discard_reply(thread_id)
-        return "", "", "", "🗑 Discarded. Nothing was saved."
+        return "", "", "", "Discarded. Nothing was saved or delivered."
 
     # ---- Activity tab ----
     def activity_handler():
@@ -118,7 +118,7 @@ def create_gradio_ui():
             f"({s['approved_verbatim']} verbatim) · **{s['rejected']}** rejected  \n"
             f"Average edit after drafting: **{edit_pct}** · "
             f"avg reviewer rounds: **{s['avg_critique_rounds'] if s['avg_critique_rounds'] is not None else '—'}**  \n"
-            f"_Lower edit % over time = the drafter is matching what people approve._"
+            f"_A falling edit rate indicates the drafter is converging on what reviewers accept._"
         )
         rows = [
             [
@@ -133,27 +133,34 @@ def create_gradio_ui():
         ]
         return md, rows
 
+    header_html = """
+    <div class="app-header">
+      <div class="title">Document Assistant<span class="thin"> — grounded answers &amp; supervised replies</span></div>
+      <div class="meta"><span class="dot"></span>Every reply requires human approval</div>
+    </div>
+    """
+    footer_html = (
+        '<div class="app-footer"><span>Retrieval-augmented · answers cite their sources</span>'
+        '<span>Approved replies are recorded in outbox/ with an audit trail</span></div>'
+    )
+
     with gr.Blocks(title="Document Assistant") as demo:
-        gr.Markdown(
-            "## Document Assistant\n"
-            '<p class="app-intro">Ask questions about your files, and draft replies you approve before they are saved.</p>',
-            sanitize_html=False,
-        )
+        gr.HTML(header_html)
 
         with gr.Tab("Documents", elem_id="doc-management-tab"):
-            gr.Markdown("Upload PDF or Markdown files. Existing files are skipped; use *Clear All* before re-indexing.")
+            gr.Markdown("Upload PDF or Markdown files to the knowledge base. Existing files are skipped; use Clear All to re-index.")
             
             files_input = gr.File(
-                label="Drop PDF or Markdown files here",
+                label="Knowledge base files",
                 file_count="multiple",
                 type="filepath",
                 height=200,
                 show_label=False
             )
             
-            add_btn = gr.Button("Add Documents", variant="primary", size="md")
+            add_btn = gr.Button("Add to knowledge base", variant="primary", size="md")
             
-            gr.Markdown("## Current Documents in the Knowledge Base")
+            gr.Markdown("## Indexed documents")
             file_list = gr.Textbox(
                 value=format_file_list(),
                 interactive=False,
@@ -172,7 +179,7 @@ def create_gradio_ui():
             clear_btn.click(clear_handler, None, file_list)
         
         with gr.Tab("Chat"):
-            gr.Markdown("Ask anything about your uploaded documents. Every answer is based on the documents and lists its sources.")
+            gr.Markdown("Answers are drawn only from the indexed documents and cite their sources.")
             chatbot = gr.Chatbot(
                 height=680,
                 placeholder="<strong>Ask a question about your uploaded documents.</strong>",
@@ -186,38 +193,37 @@ def create_gradio_ui():
         if config.HITL_REPLY_ENABLED:
             with gr.Tab("Draft Reply"):
                 gr.Markdown(
-                    "Paste a message you need to answer. The system researches a grounded answer "
-                    "from your documents and drafts a reply. **Edit it freely, then approve** - only "
-                    "then is it written to `outbox/`."
+                    "Paste an incoming message. The system researches a grounded answer, drafts a reply, "
+                    "and holds it for your review. The reply is delivered only after you approve it."
                 )
                 reply_thread = gr.State("")
 
                 incoming_box = gr.Textbox(
-                    label="Incoming message / question to answer",
+                    label="Incoming message",
                     lines=4,
                     placeholder="e.g. Hi, can a monthly customer still get a refund 10 days after being charged?",
                 )
-                draft_start_btn = gr.Button("Research & draft reply", variant="primary")
+                draft_start_btn = gr.Button("Research & draft", variant="primary")
 
                 with gr.Accordion("Researched answer, passages & reviewer notes", open=False):
                     research_box = gr.Markdown()
 
                 draft_box = gr.Textbox(
-                    label="Proposed reply — edit before approving",
+                    label="Proposed reply (editable)",
                     lines=16,
                     interactive=True,
                 )
                 with gr.Row():
                     revise_box = gr.Textbox(
-                        label="Ask for changes (optional)",
+                        label="Request changes (optional)",
                         placeholder="e.g. make it shorter and drop the greeting",
                         lines=2,
                         scale=3,
                     )
-                    revise_btn = gr.Button("Redraft with changes", scale=1)
+                    revise_btn = gr.Button("Redraft", scale=1)
                 with gr.Row():
-                    approve_btn = gr.Button("✅ Approve & save to outbox", variant="primary")
-                    discard_btn = gr.Button("🗑 Discard", variant="stop")
+                    approve_btn = gr.Button("Approve & deliver", variant="primary")
+                    discard_btn = gr.Button("Discard", variant="stop")
 
                 reply_status = gr.Markdown()
 
@@ -244,9 +250,9 @@ def create_gradio_ui():
 
             with gr.Tab("Activity"):
                 gr.Markdown(
-                    "Every approve / reject is logged, along with how much you changed the "
-                    "draft before approving it. Watch the edit % — it should drop as the "
-                    "drafter learns what people sign off on."
+                    "Each approval and rejection is recorded, with the edit distance between the "
+                    "drafted reply and the version you approved. A falling edit rate indicates "
+                    "the drafter is converging on what reviewers accept."
                 )
                 activity_md = gr.Markdown()
                 activity_table = gr.Dataframe(
@@ -260,5 +266,7 @@ def create_gradio_ui():
                 activity_refresh.click(activity_handler, None, [activity_md, activity_table])
                 approve_btn.click(activity_handler, None, [activity_md, activity_table])
                 discard_btn.click(activity_handler, None, [activity_md, activity_table])
+
+        gr.HTML(footer_html)
 
     return demo

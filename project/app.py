@@ -19,13 +19,13 @@ logging.getLogger("opentelemetry.context").addFilter(_SuppressOtelDetachWarning(
 from ui.css import custom_css
 from ui.gradio_app import create_gradio_ui
 
-# The custom CSS is a Material-3 dark palette; force Gradio's own dark mode so
-# every built-in element matches regardless of the viewer's OS setting.
-FORCE_DARK_JS = """
+# The custom CSS is a light palette; force Gradio's own light mode so every
+# built-in element matches regardless of the viewer's OS setting.
+FORCE_LIGHT_JS = """
 function () {
     const u = new URL(window.location);
-    if (u.searchParams.get('__theme') !== 'dark') {
-        u.searchParams.set('__theme', 'dark');
+    if (u.searchParams.get('__theme') !== 'light') {
+        u.searchParams.set('__theme', 'light');
         window.location.replace(u.toString());
     }
 }
@@ -35,4 +35,4 @@ if __name__ == "__main__":
     print("\n🔨 Creating RAG Assistant...")
     demo = create_gradio_ui()
     print("\n🚀 Launching RAG Assistant...")
-    demo.launch(css=custom_css, js=FORCE_DARK_JS)
+    demo.launch(css=custom_css, js=FORCE_LIGHT_JS)
