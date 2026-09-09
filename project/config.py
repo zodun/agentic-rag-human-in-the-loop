@@ -28,6 +28,17 @@ HITL_REPLY_ENABLED = os.environ.get("HITL_REPLY_ENABLED", "true").lower() == "tr
 # debugging or demos of the pipeline.
 SHOW_AGENT_STEPS = os.environ.get("SHOW_AGENT_STEPS", "false").lower() == "true"
 
+# A reviewer agent checks each draft against the researched answer before the
+# human sees it (unsupported claims, missing caveats, tone). One auto-revision.
+CRITIC_ENABLED = os.environ.get("CRITIC_ENABLED", "true").lower() == "true"
+
+# If set, an approved reply is also POSTed to this Slack Incoming Webhook (still
+# only after human approval). Unset = the reply is only written to outbox/.
+SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
+
+# Where the approve / reject / edit-distance log is written.
+DECISION_LOG_PATH = os.path.join(OUTBOX_PATH, "_decisions.jsonl")
+
 # --- Qdrant Configuration ---
 CHILD_COLLECTION = "document_child_chunks"
 SPARSE_VECTOR_NAME = "sparse"

@@ -1,4 +1,6 @@
+import json
 import re
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -38,7 +40,24 @@ class OutboxManager:
     def __init__(self, outbox_path: str | None = None):
         self.outbox_path = Path(outbox_path or config.OUTBOX_PATH)
 
-    def send(self, *, draft: str, query: str, revisions: int = 0) -> str:
+    def _post_to_slack(self, subject: str, body: str) -> bool:
+        webhook = getattr(config, "SLACK_WEBHOOK_URL", "")
+        if not webhook:
+            return False
+        payload = json.dumps({"text": f"*{subject}*\n\n{body}"}).encode("utf-8")
+        req = urllib.request.Request(
+            webhook, data=payload, headers={"Content-Type": "application/json"}, method="POST"
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return 200 <= resp.status < 300
+        except Exception as exc:
+            log_error("outbox.slack", exc)
+            return False
+
+    def send(self, *, draft: str, query: str, revisions: int = 0) -> dict:
+        """Deliver a human-approved reply. Always writes a file; also posts to
+        Slack when SLACK_WEBHOOK_URL is set. Returns {path, delivered_to}."""
         log_tool_start("outbox.send", {"query": query, "revisions": revisions})
         try:
             self.outbox_path.mkdir(parents=True, exist_ok=True)
@@ -47,20 +66,24 @@ class OutboxManager:
             filename = f"{now.strftime('%Y%m%dT%H%M%SZ')}__{_slugify(subject)}.md"
             file_path = self.outbox_path / filename
 
+            slack_ok = self._post_to_slack(subject, body)
+            channels = ["outbox/"] + (["Slack"] if slack_ok else [])
+
             front_matter = (
                 "---\n"
                 f"sent_at: {now.isoformat()}\n"
                 f"subject: {subject}\n"
                 f"in_reply_to_query: {query!r}\n"
                 f"revisions_before_approval: {revisions}\n"
+                f"delivered_to: {', '.join(channels)}\n"
                 "approved_by: human (Gradio human-in-the-loop)\n"
                 "---\n\n"
             )
             file_path.write_text(front_matter + body + "\n", encoding="utf-8")
 
-            rel_path = f"outbox/{filename}"
-            log_tool_end("outbox.send", rel_path)
-            return rel_path
+            result = {"path": f"outbox/{filename}", "delivered_to": ", ".join(channels)}
+            log_tool_end("outbox.send", result["path"])
+            return result
         except Exception as exc:
             log_error("outbox.send", exc)
             raise

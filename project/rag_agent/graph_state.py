@@ -24,12 +24,16 @@ class State(MessagesState):
     agent_answers: Annotated[List[dict], accumulate_or_reset] = []
     # --- Human-in-the-loop outbound reply ---
     researchedAnswer: str = ""
+    retrievedPassages: List[dict] = []
     draftReply: str = ""
     replyFeedback: str = ""
     replyDecision: str = ""
     replyRevisionCount: int = 0
+    critiqueNotes: List[str] = []
+    critiqueRounds: int = 0
     replyStatus: str = ""
     replyPath: str = ""
+    replyDeliveredTo: str = ""
 
 class AgentState(MessagesState):
     """State for individual agent subgraph"""

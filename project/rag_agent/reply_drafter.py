@@ -11,9 +11,13 @@ from typing import Literal
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
+import config
 from .graph_state import State
 from .nodes import _text
-from .prompts import get_reply_drafter_prompt
+from .prompts import get_reply_critic_prompt, get_reply_drafter_prompt
+from .schemas import ReplyCritique
+
+CRITIC_MAX_ROUNDS = 1
 
 APPROVE_WORDS = {
     "approve", "approved", "approve it", "yes", "y", "send", "send it", "ok", "okay",
@@ -71,6 +75,47 @@ def draft_reply(state: State, llm):
     }
 
 
+def critique_reply(state: State, llm):
+    """Reviewer agent. Checks the draft against the researched answer before a
+    human sees it. On a first failure it sends the draft back for one auto-revision;
+    after that it passes any remaining notes through for the human to weigh."""
+    draft = state.get("draftReply", "").strip()
+    answer = state.get("researchedAnswer", "").strip()
+    rounds = state.get("critiqueRounds", 0)
+
+    context = (
+        f"Researched answer:\n{answer}\n\n"
+        f"Drafted reply:\n{draft}"
+    )
+    prior_feedback = state.get("replyFeedback", "").strip()
+    if prior_feedback:
+        context += f"\n\nReviewer instructions that were meant to be applied:\n{prior_feedback}"
+
+    try:
+        critique = llm.with_structured_output(ReplyCritique).invoke([
+            SystemMessage(content=get_reply_critic_prompt()),
+            HumanMessage(content=context),
+        ])
+        issues = [i.strip() for i in (critique.issues or []) if i.strip()]
+        ok = bool(critique.ok) and not issues
+    except Exception as exc:  # never block the pipeline on the critic
+        print(f"critique_reply: skipped ({exc})")
+        return {"critiqueNotes": [], "critiqueRounds": rounds}
+
+    if not ok and rounds < CRITIC_MAX_ROUNDS:
+        return {
+            "replyFeedback": "A reviewer flagged these; fix them: " + "; ".join(issues),
+            "critiqueRounds": rounds + 1,
+            "critiqueNotes": [],
+        }
+    return {"critiqueNotes": issues, "critiqueRounds": rounds}
+
+
+def route_after_critique(state: State) -> Literal["draft_reply", "human_approval"]:
+    # If the critic left feedback this round, it wants another draft.
+    return "draft_reply" if state.get("replyFeedback", "").strip() else "human_approval"
+
+
 def human_approval(state: State):
     """Interrupt point. Execution pauses here until a human responds."""
     return {}
@@ -106,16 +151,18 @@ def route_after_decision(state: State) -> Literal["draft_reply", "send_reply", "
 
 def send_reply(state: State, outbox):
     """Executor. Reached only after an explicit human approval."""
-    path = outbox.send(
+    result = outbox.send(
         draft=state.get("draftReply", ""),
         query=state.get("originalQuery", ""),
         revisions=state.get("replyRevisionCount", 0),
     )
+    path, delivered = result["path"], result["delivered_to"]
     return {
         "replyStatus": "sent",
         "replyPath": path,
+        "replyDeliveredTo": delivered,
         "messages": [AIMessage(
-            content=f"Approved by a human and sent. Saved to `{path}`.",
+            content=f"Approved by a human. Delivered to {delivered}. Saved to `{path}`.",
             name="reply_receipt",
         )],
     }

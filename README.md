@@ -93,6 +93,8 @@ Set in `project/.env` or `project/config.py`.
 | `ANTHROPIC_MODEL` | `claude-opus-5` | set to `claude-sonnet-5` or `claude-haiku-4-5` to cut cost |
 | `DRAFTER_MODEL` | *(blank)* | model for the reply-drafting agent; blank = same as the main model |
 | `HITL_REPLY_ENABLED` | `true` | `false` restores the original "answer only" graph |
+| `CRITIC_ENABLED` | `true` | a reviewer agent checks each draft against the researched answer before you see it (one auto-revision) |
+| `SLACK_WEBHOOK_URL` | *(blank)* | if set, approved replies are also POSTed to Slack — still only after you approve |
 | `SHOW_AGENT_STEPS` | `false` | `true` shows the retrieval steps in the chat for demos/debugging |
 
 ---
@@ -102,6 +104,10 @@ Set in `project/.env` or `project/config.py`.
 | Area | Change |
 |---|---|
 | **Human-in-the-loop reply** | New `project/rag_agent/reply_drafter.py` (drafter agent, approval pause, decision router, executor) and `project/core/outbox_manager.py`. Exposed as a dedicated **Draft Reply** tab with edit-in-place + approve/discard/redraft, kept separate from the Q&A chat |
+| **Reviewer agent** | `critique_reply` node checks the draft against the researched answer (unsupported claims, missing caveats, tone) before the human sees it, and auto-revises once |
+| **Grounding passages** | The Draft Reply context panel shows the exact retrieved chunks a reply rests on, with their source file — not just a filename list |
+| **Decision log + Activity tab** | `project/core/decision_log.py` records every approve/reject plus the edit distance between the model's draft and what the human approved; the Activity tab shows totals and the edit % over time |
+| **Pluggable delivery** | Approved replies go to `outbox/` and, if `SLACK_WEBHOOK_URL` is set, to Slack — both still behind the approval gate |
 | **Anthropic provider** | `build_llm()` provider factory in `project/core/rag_system.py` (Anthropic / Ollama / OpenAI); dropped `temperature` for models that reject it; normalized responses whose `content` is a list of blocks (thinking + text) across the nodes and the token streamer |
 | **Local Qdrant + Gradio** | `force_disable_check_same_thread=True` on the Qdrant client — Gradio runs handlers on worker threads and macOS SQLite otherwise refuses the cross-thread connection, which was silently failing every document upload |
 | **Ingestion robustness** | A failed upload now rolls back its orphaned vector-store chunks (not just the parent files) and prints a real traceback |

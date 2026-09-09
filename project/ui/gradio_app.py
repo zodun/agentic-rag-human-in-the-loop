@@ -58,40 +58,80 @@ def create_gradio_ui():
         chat_interface.clear_session()
 
     # ---- Draft Reply tab handlers ----
+    def _context_md(answer, passages, notes):
+        parts = [answer or "_No grounded answer was found in the documents._"]
+        if passages:
+            parts.append("\n\n**Passages the answer rests on**")
+            for p in passages:
+                snippet = p["text"][:320] + ("…" if len(p["text"]) > 320 else "")
+                parts.append(f"\n> {snippet}\n> — *{p['source']}*")
+        if notes:
+            parts.append("\n\n**Reviewer flagged (for your judgement)**")
+            parts += [f"\n- {n}" for n in notes]
+        return "\n".join(parts)
+
     def draft_reply_handler(incoming):
         incoming = (incoming or "").strip()
         if not incoming:
             return gr.update(), "", "", "Enter a message to respond to first."
-        result = rag_system.start_reply(incoming)
-        if result["needs_clarification"]:
+        r = rag_system.start_reply(incoming)
+        if r["needs_clarification"]:
             return (
-                f"**Needs more detail:** {result['answer']}",
-                "", result["thread_id"],
+                f"**Needs more detail:** {r['answer']}",
+                "", r["thread_id"],
                 "Add the missing detail above and click *Research & draft* again.",
             )
-        answer = result["answer"] or "_No grounded answer was found in the documents._"
-        return answer, result["draft"], result["thread_id"], "Draft ready. Edit it above if needed, then **Approve**."
+        status = "Draft ready. Edit it above if needed, then **Approve**."
+        if r["critique_notes"]:
+            status += "  _(reviewer left notes — see the context panel)_"
+        return _context_md(r["answer"], r["passages"], r["critique_notes"]), r["draft"], r["thread_id"], status
 
     def revise_reply_handler(thread_id, instructions, current_draft):
         if not thread_id:
             return current_draft, "Draft something first."
         if not (instructions or "").strip():
             return current_draft, "Type what to change, then click Redraft."
-        new_draft = rag_system.revise_reply(thread_id, instructions)
-        return new_draft, "Redrafted. Edit above if needed, then **Approve**."
+        r = rag_system.revise_reply(thread_id, instructions)
+        return r["draft"], "Redrafted. Edit above if needed, then **Approve**."
 
     def approve_reply_handler(thread_id, final_text):
         if not thread_id:
             return "Nothing to approve - draft a reply first."
         if not (final_text or "").strip():
             return "The reply is empty."
-        path = rag_system.approve_reply(thread_id, final_text)
-        return f"✅ **Approved and saved** to `{path}`"
+        r = rag_system.approve_reply(thread_id, final_text)
+        return f"✅ **Approved.** Delivered to {r['delivered_to']} · saved to `{r['path']}`"
 
     def discard_reply_handler(thread_id):
         if thread_id:
             rag_system.discard_reply(thread_id)
         return "", "", "", "🗑 Discarded. Nothing was saved."
+
+    # ---- Activity tab ----
+    def activity_handler():
+        s = rag_system.activity_summary()
+        if not s["total"]:
+            return "No decisions logged yet. Approve or reject a draft first.", []
+        edit_pct = f"{s['avg_edit_ratio'] * 100:.0f}%" if s["avg_edit_ratio"] is not None else "—"
+        md = (
+            f"**{s['total']}** decisions · **{s['approved']}** approved "
+            f"({s['approved_verbatim']} verbatim) · **{s['rejected']}** rejected  \n"
+            f"Average edit after drafting: **{edit_pct}** · "
+            f"avg reviewer rounds: **{s['avg_critique_rounds'] if s['avg_critique_rounds'] is not None else '—'}**  \n"
+            f"_Lower edit % over time = the drafter is matching what people approve._"
+        )
+        rows = [
+            [
+                r.get("ts", "")[:19].replace("T", " "),
+                r.get("decision", ""),
+                f"{r.get('edit_ratio', 0) * 100:.0f}%" if isinstance(r.get("edit_ratio"), (int, float)) else "—",
+                r.get("revisions", 0),
+                r.get("critique_rounds", 0),
+                (r.get("query", "") or "")[:60],
+            ]
+            for r in s["recent"]
+        ]
+        return md, rows
 
     with gr.Blocks(title="Document Assistant") as demo:
         gr.Markdown(
@@ -159,7 +199,7 @@ def create_gradio_ui():
                 )
                 draft_start_btn = gr.Button("Research & draft reply", variant="primary")
 
-                with gr.Accordion("Researched answer (context for the draft)", open=False):
+                with gr.Accordion("Researched answer, passages & reviewer notes", open=False):
                     research_box = gr.Markdown()
 
                 draft_box = gr.Textbox(
@@ -201,5 +241,24 @@ def create_gradio_ui():
                     [reply_thread],
                     [research_box, draft_box, reply_thread, reply_status],
                 )
+
+            with gr.Tab("Activity"):
+                gr.Markdown(
+                    "Every approve / reject is logged, along with how much you changed the "
+                    "draft before approving it. Watch the edit % — it should drop as the "
+                    "drafter learns what people sign off on."
+                )
+                activity_md = gr.Markdown()
+                activity_table = gr.Dataframe(
+                    headers=["time", "decision", "edit %", "revisions", "reviewer rounds", "question"],
+                    datatype=["str", "str", "str", "number", "number", "str"],
+                    interactive=False,
+                    wrap=True,
+                )
+                activity_refresh = gr.Button("Refresh")
+                demo.load(activity_handler, None, [activity_md, activity_table])
+                activity_refresh.click(activity_handler, None, [activity_md, activity_table])
+                approve_btn.click(activity_handler, None, [activity_md, activity_table])
+                discard_btn.click(activity_handler, None, [activity_md, activity_table])
 
     return demo

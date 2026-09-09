@@ -20,9 +20,11 @@ from .nodes import (
 )
 from .reply_drafter import (
     apply_decision,
+    critique_reply,
     discard_reply,
     draft_reply,
     human_approval,
+    route_after_critique,
     route_after_decision,
     send_reply,
 )
@@ -73,6 +75,7 @@ def create_agent_graph(llm, tools_list, draft_llm=None, hitl=None):
         # Second agent drafts an outbound reply; the graph then pauses on
         # human_approval until a person approves, rejects, or requests changes.
         outbox = OutboxManager()
+        critic_on = getattr(config, "CRITIC_ENABLED", True)
         graph_builder.add_node("draft_reply", logged_node("main.draft_reply", partial(draft_reply, llm=draft_llm)))
         graph_builder.add_node("human_approval", logged_node("main.human_approval", human_approval))
         graph_builder.add_node("apply_decision", logged_node("main.apply_decision", apply_decision))
@@ -80,7 +83,15 @@ def create_agent_graph(llm, tools_list, draft_llm=None, hitl=None):
         graph_builder.add_node("discard_reply", logged_node("main.discard_reply", discard_reply))
 
         graph_builder.add_edge("aggregate_answers", "draft_reply")
-        graph_builder.add_edge("draft_reply", "human_approval")
+        if critic_on:
+            graph_builder.add_node("critique_reply", logged_node("main.critique_reply", partial(critique_reply, llm=draft_llm)))
+            graph_builder.add_edge("draft_reply", "critique_reply")
+            graph_builder.add_conditional_edges(
+                "critique_reply", route_after_critique,
+                {"draft_reply": "draft_reply", "human_approval": "human_approval"},
+            )
+        else:
+            graph_builder.add_edge("draft_reply", "human_approval")
         graph_builder.add_edge("human_approval", "apply_decision")
         graph_builder.add_conditional_edges(
             "apply_decision",

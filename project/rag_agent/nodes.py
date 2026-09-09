@@ -1,3 +1,4 @@
+import re
 from typing import Literal, Set
 from langchain_core.messages import SystemMessage, HumanMessage, RemoveMessage, AIMessage, ToolMessage
 from langgraph.types import Command
@@ -107,12 +108,16 @@ def summarize_history(state: State, llm):
         "agent_answers": [{"__reset__": True}],
         # Clear any human-in-the-loop reply state from the previous turn.
         "researchedAnswer": "",
+        "retrievedPassages": [],
         "draftReply": "",
         "replyFeedback": "",
         "replyDecision": "",
         "replyRevisionCount": 0,
+        "critiqueNotes": [],
+        "critiqueRounds": 0,
         "replyStatus": "",
         "replyPath": "",
+        "replyDeliveredTo": "",
     }
 
     if not messages:
@@ -348,16 +353,45 @@ def collect_answer(state: AgentState):
     }
 # --- End of Agent Nodes---
 
+def _parse_passages(agent_answers, limit: int = 5) -> list[dict]:
+    """Pull the actual retrieved chunks (source + text) out of the agent answers,
+    so the UI can show the exact passages an answer rests on, not just filenames."""
+    passages: list[dict] = []
+    seen: Set[str] = set()
+    for ans in agent_answers or []:
+        for ctx in ans.get("contexts", []):
+            text = str(ctx)
+            source, body = "", text
+            m = re.search(r"File Name:\s*(.+)", text)
+            if m:
+                source = m.group(1).strip()
+            c = re.search(r"Content:\s*(.+)", text, re.DOTALL)
+            if c:
+                body = c.group(1).strip()
+            body = " ".join(body.split())
+            if not body:
+                continue
+            key = body[:120]
+            if key in seen:
+                continue
+            seen.add(key)
+            passages.append({"source": source or "document", "text": body[:600]})
+            if len(passages) >= limit:
+                return passages
+    return passages
+
 def aggregate_answers(state: State, llm):
     messages = state.get("messages", [])
     plain_messages = [msg for msg in messages if _is_plain_conversation_message(msg)]
     keep_ids = {getattr(msg, "id", None) for msg in plain_messages[-PRE_ANSWER_HISTORY_MESSAGES_TO_KEEP:]}
     keep_ids.discard(None)
     removals = _remove_messages_not_in(messages, keep_ids)
+    passages = _parse_passages(state.get("agent_answers"))
 
     if not state.get("agent_answers"):
         no_answer = "No answers were generated."
-        return {"messages": removals + [AIMessage(content=no_answer)], "researchedAnswer": no_answer}
+        return {"messages": removals + [AIMessage(content=no_answer)],
+                "researchedAnswer": no_answer, "retrievedPassages": passages}
 
     sorted_answers = sorted(state["agent_answers"], key=lambda x: x["index"])
 
@@ -371,4 +405,5 @@ def aggregate_answers(state: State, llm):
     return {
         "messages": removals + [AIMessage(content=synthesis_text)],
         "researchedAnswer": synthesis_text,
+        "retrievedPassages": passages,
     }

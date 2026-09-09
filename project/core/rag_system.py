@@ -8,6 +8,7 @@ from document_chunker import DocumentChunker
 from rag_agent.tools import ToolFactory
 from rag_agent.graph import create_agent_graph
 from core.observability import Observability
+from core import decision_log
 
 
 def build_llm(model_override: str | None = None):
@@ -112,34 +113,61 @@ class RAGSystem:
                  if isinstance(m, AIMessage) and getattr(m, "name", None) == "clarification"),
                 "The question needs more detail to answer.",
             )
-            return {"thread_id": thread_id, "answer": clarification, "draft": "", "needs_clarification": True}
+            return {"thread_id": thread_id, "answer": clarification, "draft": "",
+                    "passages": [], "critique_notes": [], "needs_clarification": True}
 
         return {
             "thread_id": thread_id,
             "answer": values.get("researchedAnswer", ""),
             "draft": values.get("draftReply", ""),
+            "passages": values.get("retrievedPassages", []),
+            "critique_notes": values.get("critiqueNotes", []),
             "needs_clarification": False,
         }
 
-    def revise_reply(self, thread_id: str, instructions: str) -> str:
-        """Redraft with reviewer instructions. Returns the new draft."""
+    def revise_reply(self, thread_id: str, instructions: str) -> dict:
+        """Redraft with reviewer instructions. Returns the new draft + critic notes."""
         cfg = self._reply_cfg(thread_id)
         self.reply_graph.update_state(cfg, {"messages": [HumanMessage(content=instructions.strip())]})
         self.reply_graph.invoke(None, cfg)
-        return (self.reply_graph.get_state(cfg).values or {}).get("draftReply", "")
+        values = self.reply_graph.get_state(cfg).values or {}
+        return {"draft": values.get("draftReply", ""), "critique_notes": values.get("critiqueNotes", [])}
 
-    def approve_reply(self, thread_id: str, final_text: str) -> str:
-        """Approve the (possibly hand-edited) text and write it to the outbox.
-        Returns the saved file path."""
+    def approve_reply(self, thread_id: str, final_text: str) -> dict:
+        """Approve the (possibly hand-edited) text, deliver it, and log the decision
+        plus how far the human moved it from the model's draft."""
         cfg = self._reply_cfg(thread_id)
+        before = (self.reply_graph.get_state(cfg).values or {})
+        model_draft = before.get("draftReply", "")
+
         self.reply_graph.update_state(cfg, {"draftReply": final_text})
         self.reply_graph.update_state(cfg, {"messages": [HumanMessage(content="approve")]})
         self.reply_graph.invoke(None, cfg)
-        return (self.reply_graph.get_state(cfg).values or {}).get("replyPath", "")
+        after = self.reply_graph.get_state(cfg).values or {}
+
+        decision_log.record(
+            decision="approved",
+            query=after.get("originalQuery", ""),
+            revisions=after.get("replyRevisionCount", 0),
+            critique_rounds=after.get("critiqueRounds", 0),
+            edit_ratio=decision_log.edit_ratio(model_draft, final_text),
+            delivered_to=after.get("replyDeliveredTo", "outbox/"),
+        )
+        return {"path": after.get("replyPath", ""), "delivered_to": after.get("replyDeliveredTo", "outbox/")}
+
+    def activity_summary(self) -> dict:
+        return decision_log.summary()
 
     def discard_reply(self, thread_id: str) -> None:
         cfg = self._reply_cfg(thread_id)
         try:
+            values = self.reply_graph.get_state(cfg).values or {}
+            decision_log.record(
+                decision="rejected",
+                query=values.get("originalQuery", ""),
+                revisions=values.get("replyRevisionCount", 0),
+                critique_rounds=values.get("critiqueRounds", 0),
+            )
             self.reply_graph.update_state(cfg, {"messages": [HumanMessage(content="reject")]})
             self.reply_graph.invoke(None, cfg)
             self.reply_graph.checkpointer.delete_thread(thread_id)
