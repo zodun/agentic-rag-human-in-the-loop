@@ -107,31 +107,48 @@ def create_gradio_ui():
             rag_system.discard_reply(thread_id)
         return "", "", "", "Discarded. Nothing was saved or delivered."
 
+    # ---- Chat tab handlers ----
+    def chat_submit(message, history):
+        message = (message or "").strip()
+        history = history or []
+        if not message:
+            yield history, ""
+            return
+        history = history + [{"role": "user", "content": message}]
+        yield history, ""
+        for msgs in chat_interface.chat(message, history):
+            if isinstance(msgs, str):
+                msgs = [{"role": "assistant", "content": msgs}]
+            yield history + msgs, ""
+
+    def chat_reset():
+        clear_chat_handler()
+        return [], ""
+
     # ---- Activity tab ----
     def activity_handler():
         s = rag_system.activity_summary()
         if not s["total"]:
-            return "No decisions logged yet. Approve or reject a draft first.", []
+            return "_No decisions recorded yet. Approve or discard a draft first._", ""
         edit_pct = f"{s['avg_edit_ratio'] * 100:.0f}%" if s["avg_edit_ratio"] is not None else "—"
+        rounds = s["avg_critique_rounds"] if s["avg_critique_rounds"] is not None else "—"
         md = (
-            f"**{s['total']}** decisions · **{s['approved']}** approved "
-            f"({s['approved_verbatim']} verbatim) · **{s['rejected']}** rejected  \n"
-            f"Average edit after drafting: **{edit_pct}** · "
-            f"avg reviewer rounds: **{s['avg_critique_rounds'] if s['avg_critique_rounds'] is not None else '—'}**  \n"
-            f"_A falling edit rate indicates the drafter is converging on what reviewers accept._"
+            f"**{s['total']}** decisions &nbsp;·&nbsp; **{s['approved']}** approved "
+            f"({s['approved_verbatim']} verbatim) &nbsp;·&nbsp; **{s['rejected']}** rejected  \n"
+            f"Average edit after drafting: **{edit_pct}** &nbsp;·&nbsp; avg reviewer rounds: **{rounds}**  \n"
+            f"*A falling edit rate means the drafter is converging on what reviewers accept.*"
         )
-        rows = [
-            [
-                r.get("ts", "")[:19].replace("T", " "),
-                r.get("decision", ""),
-                f"{r.get('edit_ratio', 0) * 100:.0f}%" if isinstance(r.get("edit_ratio"), (int, float)) else "—",
-                r.get("revisions", 0),
-                r.get("critique_rounds", 0),
-                (r.get("query", "") or "")[:60],
-            ]
-            for r in s["recent"]
-        ]
-        return md, rows
+        header = "| Time | Decision | Edit % | Revisions | Reviewer rounds | Question |\n|---|---|---|---|---|---|\n"
+        body = ""
+        for r in s["recent"]:
+            er = r.get("edit_ratio")
+            edit = f"{er * 100:.0f}%" if isinstance(er, (int, float)) else "—"
+            q = (r.get("query", "") or "").replace("|", "/")[:70]
+            body += (
+                f"| {r.get('ts', '')[:19].replace('T', ' ')} | {r.get('decision', '')} | {edit} "
+                f"| {r.get('revisions', 0)} | {r.get('critique_rounds', 0)} | {q} |\n"
+            )
+        return md, header + body
 
     header_html = """
     <div class="app-header">
@@ -181,14 +198,23 @@ def create_gradio_ui():
         with gr.Tab("Chat"):
             gr.Markdown("Answers are drawn only from the indexed documents and cite their sources.")
             chatbot = gr.Chatbot(
-                height=680,
-                placeholder="<strong>Ask a question about your uploaded documents.</strong>",
+                height=460,
+                placeholder="<strong>Ask a question about the indexed documents.</strong>",
                 show_label=False,
                 avatar_images=(None, os.path.join(ASSETS_DIR, "chatbot_avatar.png")),
                 layout="bubble",
             )
-            chatbot.clear(clear_chat_handler)
-            gr.ChatInterface(fn=chat_handler, chatbot=chatbot)
+            with gr.Row(equal_height=True):
+                chat_in = gr.Textbox(
+                    placeholder="Ask a question about the indexed documents…",
+                    show_label=False, scale=8, container=False, lines=1, max_lines=4,
+                )
+                chat_send = gr.Button("Send", variant="primary", scale=1, min_width=90)
+            chat_clear = gr.Button("Clear conversation", variant="secondary", size="sm")
+
+            chat_send.click(chat_submit, [chat_in, chatbot], [chatbot, chat_in])
+            chat_in.submit(chat_submit, [chat_in, chatbot], [chatbot, chat_in])
+            chat_clear.click(chat_reset, None, [chatbot, chat_in])
 
         if config.HITL_REPLY_ENABLED:
             with gr.Tab("Draft Reply"):
@@ -255,13 +281,8 @@ def create_gradio_ui():
                     "the drafter is converging on what reviewers accept."
                 )
                 activity_md = gr.Markdown()
-                activity_table = gr.Dataframe(
-                    headers=["time", "decision", "edit %", "revisions", "reviewer rounds", "question"],
-                    datatype=["str", "str", "str", "number", "number", "str"],
-                    interactive=False,
-                    wrap=True,
-                )
-                activity_refresh = gr.Button("Refresh")
+                activity_table = gr.Markdown()
+                activity_refresh = gr.Button("Refresh", variant="secondary", size="sm")
                 demo.load(activity_handler, None, [activity_md, activity_table])
                 activity_refresh.click(activity_handler, None, [activity_md, activity_table])
                 approve_btn.click(activity_handler, None, [activity_md, activity_table])
