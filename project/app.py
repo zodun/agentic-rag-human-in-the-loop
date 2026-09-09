@@ -22,11 +22,20 @@ class _SuppressOtelDetachWarning(logging.Filter):
 
 logging.getLogger("opentelemetry.context").addFilter(_SuppressOtelDetachWarning())
 
+import gradio as gr
+
 from ui.css import custom_css
 from ui.gradio_app import create_gradio_ui
 
-# The custom CSS is a light palette; force Gradio's own light mode so every
-# built-in element matches regardless of the viewer's OS setting.
+# A polished built-in Gradio theme does the visual work; custom_css only nudges it.
+THEME = gr.themes.Soft(
+    primary_hue="blue",
+    neutral_hue="slate",
+    font=[gr.themes.GoogleFont("Inter"), "ui-sans-serif", "system-ui", "sans-serif"],
+    radius_size="md",
+)
+
+# Force Gradio's light mode so it looks the same regardless of the viewer's OS setting.
 FORCE_LIGHT_JS = """
 function () {
     const u = new URL(window.location);
@@ -41,4 +50,4 @@ if __name__ == "__main__":
     print("\n🔨 Creating RAG Assistant...")
     demo = create_gradio_ui()
     print("\n🚀 Launching RAG Assistant...")
-    demo.launch(css=custom_css, js=FORCE_LIGHT_JS)
+    demo.launch(css=custom_css, js=FORCE_LIGHT_JS, theme=THEME)
