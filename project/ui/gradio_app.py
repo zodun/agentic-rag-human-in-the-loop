@@ -100,16 +100,16 @@ def create_gradio_ui():
         r = rag_system.revise_reply(thread_id, instructions)
         yield r["draft"], "Rewritten. Edit if you want, then approve it or throw it away."
 
-    def approve_reply_handler(thread_id, final_text, recipient):
+    def approve_reply_handler(thread_id, final_text):
         if not thread_id:
             yield "There is no reply yet — write one first."
             return
         if not (final_text or "").strip():
             yield "The reply is empty."
             return
-        yield "⏳ Sending…"
-        r = rag_system.approve_reply(thread_id, final_text, recipient)
-        yield f"Approved. Delivered to: {r['delivered_to']}. Copy saved at `{r['path']}`."
+        yield "⏳ Saving…"
+        r = rag_system.approve_reply(thread_id, final_text)
+        yield f"Approved. Saved at `{r['path']}`."
 
     def discard_reply_handler(thread_id):
         if thread_id:
@@ -257,13 +257,8 @@ def create_gradio_ui():
                     )
                     revise_btn = gr.Button("Rewrite", variant="secondary", scale=1)
 
-                email_to = gr.Textbox(
-                    label="Send to (email) — optional",
-                    placeholder="leave blank to only save to outbox/  ·  needs SMTP set in project/.env",
-                    lines=1,
-                )
                 with gr.Row():
-                    approve_btn = gr.Button("Approve & send", variant="primary", scale=2)
+                    approve_btn = gr.Button("Approve", variant="primary", scale=2)
                     discard_btn = gr.Button("Throw away", variant="stop", scale=1)
 
                 reply_status = gr.Markdown()
@@ -280,7 +275,7 @@ def create_gradio_ui():
                 )
                 approve_btn.click(
                     approve_reply_handler,
-                    [reply_thread, draft_box, email_to],
+                    [reply_thread, draft_box],
                     [reply_status],
                 )
                 discard_btn.click(
