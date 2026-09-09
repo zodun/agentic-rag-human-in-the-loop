@@ -401,7 +401,8 @@ def aggregate_answers(state: State, llm):
 
     user_message = HumanMessage(content=f"""Original user question: {state["originalQuery"]}\nRetrieved answers:{formatted_answers}""")
     synthesis_response = llm.invoke([SystemMessage(content=get_aggregation_prompt()), user_message])
-    synthesis_text = _text(synthesis_response)
+    # "~" (used for "approximately") renders as Markdown strikethrough; swap it out.
+    synthesis_text = _text(synthesis_response).replace("~", "≈")
     return {
         "messages": removals + [AIMessage(content=synthesis_text)],
         "researchedAnswer": synthesis_text,

@@ -139,7 +139,8 @@ class ChatInterface:
         last = response_messages[-1] if response_messages else None
         if not (last and last.get("role") == "assistant" and "metadata" not in last):
             response_messages.append(make_message(""))
-        response_messages[-1]["content"] += _chunk_text(chunk)
+        # "~" (approx.) renders as Markdown strikethrough in the chat bubble
+        response_messages[-1]["content"] += _chunk_text(chunk).replace("~", "≈")
 
     def chat(self, message, history):
         """Generator that streams Gradio chat message dicts."""

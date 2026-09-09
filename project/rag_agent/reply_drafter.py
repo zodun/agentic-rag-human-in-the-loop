@@ -63,7 +63,7 @@ def draft_reply(state: State, llm):
         SystemMessage(content=get_reply_drafter_prompt()),
         HumanMessage(content="\n\n".join(context_parts)),
     ])
-    draft = _text(response).strip()
+    draft = _text(response).strip().replace("~", "≈")  # "~" renders as strikethrough
 
     revisions = state.get("replyRevisionCount", 0) + (1 if feedback else 0)
     return {
