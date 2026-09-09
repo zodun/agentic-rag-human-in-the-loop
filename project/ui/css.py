@@ -89,10 +89,10 @@ footer { display: none !important; }
     display: flex; align-items: center; justify-content: center;
     font-family: var(--font-mono); font-weight: 600; color: #060e20; font-size: 14px;
 }
-.studio-brand .name { font-weight: 600; font-size: 15px; color: var(--m3-on); letter-spacing: -0.01em; line-height: 1.1; }
+.studio-brand .name { font-weight: 600; font-size: 16px; color: var(--m3-on); letter-spacing: -0.01em; line-height: 1.15; }
 .studio-brand .sub {
-    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em;
-    text-transform: uppercase; color: var(--m3-primary); margin-top: 2px;
+    font-family: var(--font); font-size: 12.5px; color: var(--m3-on-variant);
+    margin-top: 3px; max-width: 46ch;
 }
 .studio-pill {
     display: inline-flex; align-items: center; gap: 6px;
@@ -103,20 +103,22 @@ footer { display: none !important; }
 .studio-pill.warn { color: var(--m3-tertiary); background: rgba(255,185,95,0.14); }
 .studio-pill.warn .dot { background: var(--m3-tertiary); }
 
-.studio-telemetry {
-    display: flex; flex-wrap: wrap; gap: 22px; align-items: center;
+.studio-steps {
+    display: flex; flex-wrap: wrap; gap: 14px 18px; align-items: center;
     background: var(--m3-low); border: 1px solid var(--m3-outline-variant);
-    border-radius: 6px; padding: 10px 16px; margin-bottom: 16px;
-    font-family: var(--font-mono); font-size: 12px;
+    border-radius: 6px; padding: 12px 16px; margin-bottom: 18px;
+    font-family: var(--font); font-size: 13px; color: var(--m3-on-variant);
 }
-.studio-telemetry .k { color: var(--m3-outline); margin-right: 6px; }
-.studio-telemetry .v { color: var(--m3-on); font-weight: 500; }
-.studio-telemetry .v.teal { color: var(--m3-secondary); }
-.studio-telemetry .v.amber { color: var(--m3-tertiary); }
-.studio-telemetry .v.indigo { color: var(--m3-primary); }
+.studio-steps .n {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 999px; margin-right: 7px;
+    background: var(--m3-high); color: var(--m3-primary);
+    font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+}
+.studio-steps .arrow { color: var(--m3-outline); }
 
 .studio-eyebrow {
-    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em;
     text-transform: uppercase; color: var(--m3-outline);
     margin: 4px 0 2px 0 !important;
 }
