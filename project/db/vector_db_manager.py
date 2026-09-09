@@ -1,8 +1,15 @@
+import os
+
 import config
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_qdrant import QdrantVectorStore, FastEmbedSparse, RetrievalMode
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
+
+# Apple's MPS backend crashes sentence-transformers under load
+# ("failed assertion ... MTLCommandBuffer"). Pin embeddings to CPU by default;
+# override with EMBEDDING_DEVICE=mps or cuda if your setup is stable.
+_EMBEDDING_DEVICE = os.environ.get("EMBEDDING_DEVICE", "cpu")
 
 class VectorDbManager:
     __client: QdrantClient
@@ -14,7 +21,10 @@ class VectorDbManager:
         # threads. On macOS SQLite defaults to THREADSAFE=2 (no cross-thread
         # connections), which otherwise crashes ingestion with a ProgrammingError.
         self.__client = QdrantClient(path=config.QDRANT_DB_PATH, force_disable_check_same_thread=True)
-        self.__dense_embeddings = HuggingFaceEmbeddings(model_name=config.DENSE_MODEL)
+        self.__dense_embeddings = HuggingFaceEmbeddings(
+            model_name=config.DENSE_MODEL,
+            model_kwargs={"device": _EMBEDDING_DEVICE},
+        )
         self.__sparse_embeddings = FastEmbedSparse(model_name=config.SPARSE_MODEL)
 
     def _dense_vector_size(self):

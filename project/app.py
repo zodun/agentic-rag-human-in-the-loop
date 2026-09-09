@@ -4,6 +4,12 @@ import logging
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+# Keep embedding + tokenizer work off Apple's MPS backend, which crashes
+# sentence-transformers under load with a Metal command-buffer assertion.
+os.environ.setdefault("EMBEDDING_DEVICE", "cpu")
+os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
 from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
