@@ -148,7 +148,7 @@ def create_gradio_ui():
             f"On average you changed **{edit_pct}** of a draft before approving it.  \n"
             f"*If that number drops over time, the drafts are getting closer to what you would write.*"
         )
-        header = "| When | What you did | How much you changed it | Rewrites | Checks | The message |\n|---|---|---|---|---|---|\n"
+        header = "| When | Decision | Your edits | Redrafts | Auto-checks | Message |\n|---|---|---|---|---|---|\n"
         body = ""
         for r in s["recent"]:
             er = r.get("edit_ratio")
