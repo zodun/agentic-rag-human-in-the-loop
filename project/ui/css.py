@@ -30,6 +30,15 @@ custom_css = """
     padding-top: 8px !important;
 }
 .gradio-container p, .gradio-container li, .gradio-container span { color: var(--ink) !important; }
+
+/* every tab's content fills the same width */
+[role="tabpanel"], [role="tabpanel"] > div, .tabitem,
+.gradio-container .form, .gradio-container .block, .gradio-container .prose {
+    max-width: 100% !important;
+    width: 100% !important;
+}
+[role="tabpanel"] { display: flex !important; flex-direction: column !important; gap: 14px !important; }
+
 footer { display: none !important; }
 .progress-text { font-size: 12px !important; }
 
